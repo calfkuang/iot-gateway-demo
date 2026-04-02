@@ -1,0 +1,7 @@
+/Users/tengfei/study-space/iot-gateway-demo/src/main/java/com/iot/ChangeRateDetector.java
+/Users/tengfei/study-space/iot-gateway-demo/src/main/java/com/iot/DataStore.java
+/Users/tengfei/study-space/iot-gateway-demo/src/main/java/com/iot/EdgeProcessor.java
+/Users/tengfei/study-space/iot-gateway-demo/src/main/java/com/iot/GatewayApplication.java
+/Users/tengfei/study-space/iot-gateway-demo/src/main/java/com/iot/ModbusCollector.java
+/Users/tengfei/study-space/iot-gateway-demo/src/main/java/com/iot/MqttPublisher.java
+/Users/tengfei/study-space/iot-gateway-demo/src/main/java/com/iot/WebServer.java

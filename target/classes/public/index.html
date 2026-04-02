@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Gateway 监控面板</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 28px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header p { color: #64748b; margin-top: 5px; }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+        }
+        .card-title {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .card-value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        .card-value.normal { color: #22c55e; }
+        .card-value.warning { color: #f59e0b; }
+        .card-value.danger { color: #ef4444; }
+        .card-sub { font-size: 12px; color: #64748b; margin-top: 5px; }
+
+        .chart-container {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .chart-title {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #e2e8f0;
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .status-dot.online { background: #22c55e; box-shadow: 0 0 10px #22c55e; }
+        .status-dot.offline { background: #ef4444; }
+        .status-dot.warning { background: #f59e0b; }
+
+        .trend-up { color: #ef4444; }
+        .trend-down { color: #22c55e; }
+        .trend-stable { color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>IoT Gateway 实时监控</h1>
+        <p>Modbus TCP 采集 | 边缘计算 | MQTT 上报</p>
+    </div>
+
+    <div class="dashboard">
+        <div class="card">
+            <div class="card-title">当前原始值</div>
+            <div class="card-value normal" id="rawValue">--</div>
+            <div class="card-sub">Modbus寄存器读取</div>
+        </div>
+        <div class="card">
+            <div class="card-title">滤波后数值</div>
+            <div class="card-value normal" id="filteredValue">--</div>
+            <div class="card-sub">滑动平均滤波</div>
+        </div>
+        <div class="card">
+            <div class="card-title">变化率</div>
+            <div class="card-value normal" id="changeRate">--</div>
+            <div class="card-sub" id="trend">--</div>
+        </div>
+        <div class="card">
+            <div class="card-title">告警状态</div>
+            <div class="card-value normal" id="alarmStatus">正常</div>
+            <div class="card-sub" id="alarmCount">告警次数: 0</div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <div class="chart-title">实时数据趋势</div>
+        <canvas id="dataChart" height="100"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <div class="chart-title">变化率监控</div>
+        <canvas id="rateChart" height="80"></canvas>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-item">
+            <div class="status-dot online"></div>
+            <span>Modbus连接正常</span>
+        </div>
+        <div class="status-item">
+            <div class="status-dot online"></div>
+            <span>MQTT连接正常</span>
+        </div>
+        <div class="status-item">
+            <div class="status-dot online"></div>
+            <span>边缘计算运行中</span>
+        </div>
+    </div>
+
+    <script>
+        // 图表配置
+        const ctx1 = document.getElementById('dataChart').getContext('2d');
+        const ctx2 = document.getElementById('rateChart').getContext('2d');
+
+        const dataChart = new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '原始值',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: '滤波后',
+                    data: [],
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { labels: { color: '#e2e8f0' } } },
+                scales: {
+                    x: { ticks: { color: '#64748b' }, grid: { color: '#334155' } },
+                    y: { ticks: { color: '#64748b' }, grid: { color: '#334155' } }
+                }
+            }
+        });
+
+        const rateChart = new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '变化率',
+                    data: [],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { labels: { color: '#e2e8f0' } } },
+                scales: {
+                    x: { ticks: { color: '#64748b' }, grid: { color: '#334155' } },
+                    y: { ticks: { color: '#64748b' }, grid: { color: '#334155' } }
+                }
+            }
+        });
+
+        let alarmCount = 0;
+
+        // 获取最新数据
+        async function fetchLatest() {
+            try {
+                const response = await fetch('/api/data/latest');
+                const data = await response.json();
+
+                if (data.timestamp) {
+                    updateDashboard(data);
+                }
+            } catch (e) {
+                console.error('获取数据失败:', e);
+            }
+        }
+
+        // 获取历史数据
+        async function fetchHistory() {
+            try {
+                const response = await fetch('/api/data/history?limit=30');
+                const data = await response.json();
+
+                updateCharts(data);
+            } catch (e) {
+                console.error('获取历史数据失败:', e);
+            }
+        }
+
+        // 更新仪表盘
+        function updateDashboard(data) {
+            document.getElementById('rawValue').textContent = data.rawValue?.toFixed(2) || '--';
+            document.getElementById('filteredValue').textContent = data.filteredValue?.toFixed(2) || '--';
+            document.getElementById('changeRate').textContent = (data.changeRate?.toFixed(2) || '--') + '/s';
+
+            // 趋势
+            const trendEl = document.getElementById('trend');
+            trendEl.textContent = '趋势: ' + (data.trend || '--');
+            trendEl.className = data.trend === '上升' ? 'card-sub trend-up' :
+                               data.trend === '下降' ? 'card-sub trend-down' : 'card-sub trend-stable';
+
+            // 告警状态
+            const hasAlarm = data.thresholdAlarm || data.rateAlarm;
+            const alarmEl = document.getElementById('alarmStatus');
+            alarmEl.textContent = hasAlarm ? '告警中' : '正常';
+            alarmEl.className = hasAlarm ? 'card-value danger' : 'card-value normal';
+
+            if (hasAlarm) alarmCount++;
+            document.getElementById('alarmCount').textContent = '告警次数: ' + alarmCount;
+        }
+
+        // 更新图表
+        function updateCharts(data) {
+            const labels = data.map(d => new Date(d.timestamp).toLocaleTimeString());
+            const rawValues = data.map(d => d.rawValue);
+            const filteredValues = data.map(d => d.filteredValue);
+            const changeRates = data.map(d => d.changeRate);
+
+            dataChart.data.labels = labels;
+            dataChart.data.datasets[0].data = rawValues;
+            dataChart.data.datasets[1].data = filteredValues;
+            dataChart.update();
+
+            rateChart.data.labels = labels;
+            rateChart.data.datasets[0].data = changeRates;
+            rateChart.update();
+        }
+
+        // 定时刷新
+        setInterval(fetchLatest, 1000);
+        setInterval(fetchHistory, 2000);
+
+        // 初始加载
+        fetchLatest();
+        fetchHistory();
+    </script>
+</body>
+</html>

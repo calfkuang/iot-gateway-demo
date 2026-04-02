@@ -1,0 +1,10 @@
+com/iot/EdgeProcessor.class
+com/iot/ChangeRateDetector$RateResult.class
+com/iot/WebServer.class
+com/iot/GatewayApplication.class
+com/iot/ChangeRateDetector.class
+com/iot/ModbusCollector.class
+com/iot/MqttPublisher.class
+com/iot/DataStore.class
+com/iot/EdgeProcessor$ProcessResult.class
+com/iot/DataStore$DataPoint.class
